@@ -9,42 +9,76 @@ TILE_SCALE = 0.5
 
 DEBUG = True
 
-def deg2rad(deg):
-    return (deg*math.pi/180)
+class Point:
+    def __init__(self,x,y):
+        self.x = x
+        self.y = y
+
+    def draw(self, color):
+        arcade.draw_point(self.x, self.y, color, 10)
+
+class Line:
+    def __init__(self,centerPoint,length,angle):
+        self.center = centerPoint
+        self.length = length
+        self.angle = angle
+
+    def draw(self, color):
+        arcade.draw_line(self.center.x - math.sin(math.radians(self.angle))*(self.length/2), self.center.y + math.cos(math.radians(self.angle))*(self.length/2),self.center.x + math.sin(math.radians(self.angle))*(self.length/2), self.center.y - math.cos(math.radians(self.angle))*(self.length/2),color, 2)
 
 def map(x, in_min, in_max, out_min, out_max):
     return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
 class Car:
     def __init__(self,pos_x,pos_y,heading,sprite,scale):
-        self.pos_x = pos_x
-        self.pos_y = pos_y
-        #self.scale = scale*0.1
-        #self.draw_width = self.scale * self.texture.width
-        #self.draw_height = self.scale * self.texture.height
+        self.center = Point(pos_x,pos_y)
         self.heading = heading
-        self.speed = 4
+        self.speed = 10
         self.max_speed = 15
         self.acceleration = 2.5
         self.braking = 3
-        self.driving_friction = 0.02
+        #self.driving_friction = 0.02
+        self.driving_friction = 0
+        self.steering_friction = 0.1
         self.turn_ratio = 2
+        self.wheels_turn = 30
+        self.wheels_snap = 0.25
+        self.max_wheels_turn = 30
         self.score = 0
+        self.length = 920*0.1*scale
+        self.width = 480*0.1*scale
 
         self.sprite = arcade.Sprite(sprite,scale*0.1)
-        self.sprite.center_x = self.pos_x
-        self.sprite.center_y = self.pos_y
+        self.sprite.center_x = self.center.x
+        self.sprite.center_y = self.center.y
         self.sprite.angle = self.heading
-    
-    def draw(self):
-        self.sprite.draw()
+
         if DEBUG:
-            arcade.draw_rectangle_filled(self.pos_x + 75, self.pos_y + 125, 100, 200, arcade.color.BLUSH)
-            arcade.draw_text("speed: " + str(round(self.speed,3)), self.pos_x + 35, self.pos_y + 35, arcade.color.BLACK, 10)
-            arcade.draw_text("x:     " + str(round(self.pos_x,3)), self.pos_x + 35, self.pos_y + 50, arcade.color.BLACK, 10)
-            arcade.draw_text("y:     " + str(round(self.pos_y,3)), self.pos_x + 35, self.pos_y + 65, arcade.color.BLACK, 10)
-            arcade.draw_text("h:     " + str(round(self.heading,3)), self.pos_x + 35, self.pos_y + 80, arcade.color.BLACK, 10)
-            arcade.draw_text("score: " + str(round(self.score,3)), self.pos_x + 35, self.pos_y + 95, arcade.color.BLACK, 10)
+            self.front_wheel = Line(Point(self.center.x - math.sin(math.radians(self.heading))*(self.length/2), self.center.y + math.cos(math.radians(self.heading))*(self.length/2)),20,self.heading + self.wheels_turn)
+        self.rear_wheel = Line(Point(self.center.x + math.sin(math.radians(self.heading))*(self.length/2), self.center.y - math.cos(math.radians(self.heading))*(self.length/2)),20,self.heading)
+        self.turn_center = None
+        self.turn_radius = None
+
+    def draw(self):
+        if DEBUG:
+            arcade.draw_rectangle_filled(60, 67.5, 100, 115, arcade.color.BLUSH)
+            arcade.draw_text("speed: " + str(round(self.speed,3)), 25, 100, arcade.color.BLACK, 10)
+            arcade.draw_text("x:     " + str(round(self.center.x,3)), 25, 85, arcade.color.BLACK, 10)
+            arcade.draw_text("y:     " + str(round(self.center.y,3)), 25, 70, arcade.color.BLACK, 10)
+            arcade.draw_text("h:     " + str(round(self.heading,3)), 25, 55, arcade.color.BLACK, 10)
+            arcade.draw_text("wh:    " + str(round(self.wheels_turn,3)), 25, 40, arcade.color.BLACK, 10)
+            arcade.draw_text("score: " + str(round(self.score,3)), 25, 25, arcade.color.BLACK, 10)
+
+            if self.turn_center is not None:
+                self.turn_center.draw(arcade.color.GREEN)
+            if self.turn_radius is not None:
+                arcade.draw_circle_outline(self.turn_center.x,self.turn_center.y,self.turn_radius,arcade.color.GREEN,2)
+            self.front_wheel.draw(arcade.color.RED)
+            self.center.draw(arcade.color.YELLOW)
+            self.rear_wheel.draw(arcade.color.BLUE)
+            arcade.draw_rectangle_outline(self.center.x,self.center.y,self.width,self.length,arcade.color.BLACK,2,self.heading)
+        else:
+            self.sprite.draw()
 
     def update(self,steer_dir,steer_vel):
         self.speed -= self.driving_friction
@@ -58,14 +92,42 @@ class Car:
         elif self.speed < 0:
             self.speed = 0
 
-        if ((steer_dir > DEAD_ZONE) or steer_dir < (-1*DEAD_ZONE)) and self.speed > 0:
-            self.heading -= steer_dir*self.turn_ratio
+        if self.wheels_turn > 0:
+            self.wheels_turn -= self.steering_friction
+        elif self.wheels_turn < 0:
+            self.wheels_turn += self.steering_friction
+        if self.wheels_turn < self.wheels_snap and self.wheels_turn > (-1)*self.wheels_snap:
+            self.wheels_turn = 0
+        if ((steer_dir > DEAD_ZONE) or steer_dir < (-1*DEAD_ZONE)):
+            self.wheels_turn -= steer_dir*self.turn_ratio
+        if self.wheels_turn > self.max_wheels_turn:
+            self.wheels_turn = self.max_wheels_turn
+        elif self.wheels_turn < (-1)*self.max_wheels_turn:
+            self.wheels_turn = (-1)*self.max_wheels_turn
 
-        self.pos_x -= math.sin(deg2rad(self.heading))*self.speed
-        self.pos_y += math.cos(deg2rad(self.heading))*self.speed
+        if self.wheels_turn != 0:
+            self.turn_radius = self.length/math.tan(math.radians(self.wheels_turn))
+            self.turn_center = Point(self.rear_wheel.center.x - math.sin(math.radians(self.heading + 90))*self.turn_radius,self.rear_wheel.center.y + math.cos(math.radians(self.heading + 90))*self.turn_radius)
+            circle_angle = (180*self.speed)/(math.pi*self.turn_radius)
+            stop_angle = self.heading + math.copysign(90,self.turn_radius) + 180 + circle_angle
+            new_rear_wheel = Point(self.turn_center.x - math.copysign(self.turn_radius,1) * math.sin(math.radians(stop_angle)),self.turn_center.y + math.copysign(self.turn_radius,1) * math.cos(math.radians(stop_angle)))
+            self.heading += circle_angle
+            self.center.x = new_rear_wheel.x - (self.length/2) * math.sin(math.radians(self.heading))
+            self.center.y = new_rear_wheel.y + (self.length/2) * math.cos(math.radians(self.heading))
+        else:
+            self.turn_center = None
+            self.turn_radius = None
+            self.center.x -= math.sin(math.radians(self.heading))*self.speed
+            self.center.y += math.cos(math.radians(self.heading))*self.speed
         
-        self.sprite.center_x = self.pos_x
-        self.sprite.center_y = self.pos_y
+        if DEBUG:
+            self.front_wheel.center = Point(self.center.x - math.sin(math.radians(self.heading))*(self.length/2), self.center.y + math.cos(math.radians(self.heading))*(self.length/2))
+            self.front_wheel.angle = self.heading + self.wheels_turn
+        self.rear_wheel.center =  Point(self.center.x + math.sin(math.radians(self.heading))*(self.length/2), self.center.y - math.cos(math.radians(self.heading))*(self.length/2))
+        self.rear_wheel.angle = self.heading
+        
+        self.sprite.center_x = self.center.x
+        self.sprite.center_y = self.center.y
         self.sprite.angle = self.heading
         #TODO - check collision
         self.score += self.speed
