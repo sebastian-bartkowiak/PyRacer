@@ -166,9 +166,9 @@ class MyGame(arcade.Window):
         if joysticks:
             self.joystick = joysticks[0]
             self.joystick.open()
-        """ else:
-            print("There are no joysticks.")
-            sys.exit(1) """
+        else:
+            print("No joysticks found! Exiting...")
+            sys.exit(1)
 
     def on_draw(self):
         arcade.start_render()
@@ -176,8 +176,7 @@ class MyGame(arcade.Window):
         self.car.draw()
 
     def update(self, delta_time):
-        self.car.update(0,0)
-        #self.car.update(self.joystick.x,self.joystick.z*(-1))
+        self.car.update(self.joystick.x,self.joystick.z*(-1))
 
 def main():
     game = MyGame("PyRacer", "test.csv")
